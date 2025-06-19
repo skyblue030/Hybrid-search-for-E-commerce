@@ -1,4 +1,4 @@
-# 智慧電影搜尋與問答系統 (Intelligent Movie Search & Q&A System)
+# 智慧電影搜尋與問答系統 (Hybrid Search for Movie & RAG Response)
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi)
