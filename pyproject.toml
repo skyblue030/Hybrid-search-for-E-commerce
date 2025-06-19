@@ -12,7 +12,8 @@ dependencies = [
     "chromadb",
     "dotenv",
     "torch==2.7.1+cu126",
-
+    "google.generativeai",
+    
     # download pytorch with your cuda
 ]
 

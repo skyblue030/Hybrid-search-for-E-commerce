@@ -27,3 +27,13 @@ class Movie(BaseModel):
 class SearchResponse(BaseModel):
     count: int
     results: List[Movie]
+
+# app/models.py (在檔案最末端加上這段)
+
+class AskRequest(BaseModel):
+    question: str = Field(description="使用者針對單一電影提出的問題")
+
+class AskResponse(BaseModel):
+    movie_id: int
+    question: str
+    answer: str

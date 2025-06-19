@@ -1,36 +1,67 @@
 # (FastAPI 主程式)
-# app/main.py
+# app/main.py (修改後，支援直接執行)
+
+# --- 新增：路徑修正 ---
+# 這是實現直接執行的關鍵。
+# 它會將專案的根目錄 (Hybrid-search-for-E-commerce) 加入到 Python 的搜尋路徑中。
+import sys
+import os
+# 將 'app' 資料夾的上一層目錄 (也就是專案根目錄) 加入到 sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# -------------------------
+
 import logging
+import uvicorn # <--- 新增 uvicorn 的導入
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import List
+import google.generativeai as genai
 
-from . import database, models
+# --- 變更：從相對導入改成絕對導入 ---
+# 因為我們已經將專案根目錄加入路徑，現在可以用 'app' 作為起點來導入
+from app import database, models 
+# ------------------------------------
+
+# --- Gemini 設定 (保持不變) ---
+try:
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    llm_model = genai.GenerativeModel('gemini-1.5-flash-002')
+    logging.info("成功設定 Gemini API。")
+except Exception as e:
+    llm_model = None
+    logging.error(f"設定 Gemini API 失敗: {e}")
+# -------------------------
 
 app = FastAPI(
-    title="智慧電影搜尋 API",
-    description="結合精準篩選 (PostgreSQL) 和語意搜尋 (ChromaDB) 的混合搜尋引擎。",
-    version="1.0.0",
+    title="智慧電影搜尋與問答 API",
+    description="結合精準篩選、語意搜尋與 RAG 問答的智慧引擎。",
+    version="1.1.0",
 )
 
 logger = logging.getLogger(__name__)
 
+# --- CORS 設定 (保持不變) ---
+origins = ["http://localhost", "http://localhost:3000"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# -------------------------
+
+# --- API 端點 (保持不變) ---
 @app.post("/search/", response_model=models.SearchResponse)
 def hybrid_search(request: models.SearchRequest, db: Session = Depends(database.get_db)):
-    """
-    執行混合搜尋：
-    1.  **預篩選 (PostgreSQL)**：根據類型、年份、評分等條件篩選候選電影。
-    2.  **語意排序 (ChromaDB)**：在候選電影中，根據使用者查詢進行語意相似度搜尋與排序。
-    3.  **結果獲取 (PostgreSQL)**：獲取排序後的完整電影資訊。
-    """
+    # ... (這個函式的內部邏輯完全不用變)
     # --- 1. 預篩選 (PostgreSQL) ---
     where_clauses = []
     params = {}
 
     if request.filters:
         if request.filters.genre:
-            # 使用 @> 運算子來檢查陣列是否包含某個元素
             where_clauses.append("genres @> ARRAY[:genre]")
             params["genre"] = request.filters.genre
         if request.filters.min_year:
@@ -76,3 +107,45 @@ def hybrid_search(request: models.SearchRequest, db: Session = Depends(database.
     final_ordered_products = [models.Movie.model_validate(products_map[pid]) for pid in sorted_ids if pid in products_map]
 
     return models.SearchResponse(count=len(final_ordered_products), results=final_ordered_products)
+
+@app.post("/ask/{movie_id}", response_model=models.AskResponse, tags=["Q&A"])
+def ask_about_movie(movie_id: int, request: models.AskRequest, db: Session = Depends(database.get_db)):
+    # ... (這個函式的內部邏輯也完全不用變)
+    if not llm_model:
+        raise HTTPException(status_code=500, detail="LLM 服務未成功初始化")
+    movie = db.execute(text("SELECT title, overview FROM movies WHERE id = :id"), {"id": movie_id}).first()
+    if not movie:
+        raise HTTPException(status_code=404, detail="找不到該 ID 的電影")
+    context = f"電影標題: {movie.title}\n劇情摘要: {movie.overview}"
+    prompt = f"""
+    請你扮演一個電影知識專家。請只根據我提供的「上下文」，用繁體中文簡潔地回答「問題」。
+    如果答案不在上下文中，請回答「根據提供的摘要，我無法回答這個問題。」
+
+    ---
+    上下文:
+    {context}
+    ---
+    問題: {request.question}
+    ---
+    回答:
+    """
+    try:
+        response = llm_model.generate_content(prompt)
+        answer = response.text
+    except Exception as e:
+        logger.error(f"呼叫 Gemini API 時發生錯誤: {e}")
+        raise HTTPException(status_code=500, detail="生成回答時發生錯誤")
+    return models.AskResponse(
+        movie_id=movie_id,
+        question=request.question,
+        answer=answer
+    )
+# -------------------------
+
+# --- 新增：主程式啟動入口 ---
+if __name__ == "__main__":
+    # 這段程式碼只有在 main.py 被「直接執行」時才會觸發
+    # 它會以程式化的方式啟動 Uvicorn 伺服器
+    logger.info("以直接執行模式啟動伺服器...")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+# -------------------------

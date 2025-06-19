@@ -21,7 +21,11 @@ DB_NAME = os.getenv("DB_NAME", "ecommerce_rag")
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # --- 更新為電影資料庫的設定 ---
-VECTOR_DB_PATH = "./chroma_db_movies"
+# 智慧地計算出專案根目錄，並組合出絕對路徑
+# 這讓路徑設定不再受執行指令時的所在位置影響
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+VECTOR_DB_PATH = os.path.join(PROJECT_ROOT, "chroma_db_movies")
+# -------------------------
 COLLECTION_NAME = "movie_plots"
 EMBEDDING_MODEL_NAME = 'BAAI/bge-m3'
 DEVICE = "cuda"
