@@ -25,3 +25,14 @@ chroma_db_ecommerce/
 
 # Large Raw Data Files
 /data/
+
+# Frontend Project (React)
+# =========================
+/frontend/node_modules/
+/frontend/build/
+/frontend/.pnp.js
+/frontend/.pnp.loader.js
+/frontend/coverage/
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
