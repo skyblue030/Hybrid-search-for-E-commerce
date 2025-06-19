@@ -1,0 +1,34 @@
+[project]
+name = "hybrid-search-for-e-commerce"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "sentence_transformers",
+    "chromadb",
+    "dotenv",
+    "torch==2.7.1+cu126",
+
+    # download pytorch with your cuda
+]
+
+# ------------------------------------------------------------------
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu126" },
+]
+torchvision = [
+    { index = "pytorch-cu126" },
+]
+torchaudio = [
+    { index = "pytorch-cu126" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

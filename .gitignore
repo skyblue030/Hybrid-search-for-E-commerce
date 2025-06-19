@@ -1,0 +1,27 @@
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Secrets - VERY IMPORTANT!
+.env
+*.env
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Project-specific ignores
+# ============================
+
+# Vector Database (Generated)
+chroma_db_movies/
+chroma_db_ecommerce/
+
+# Large Raw Data Files
+/data/
