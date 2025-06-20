@@ -1,0 +1,160 @@
+===================================================================================================
+                        智慧電影搜尋與問答系統 (Hybrid Search for Movie & RAG Response)
+                                        專案架構圖
+===================================================================================================
+
++-------------------------------------------------------------------------------------------------+
+| 使用者 (User via Browser)                                                                       |
+| Accesses: http://localhost (Frontend)                                                           |
++-------------------------------------------------------------------------------------------------+
+       │
+       │ HTTP Requests (Search, Ask Questions)
+       ▼
++-------------------------------------------------------------------------------------------------+
+| Dockerized Frontend Service (frontend)                                                          |
+|   Build: Dockerfile.frontend (target: production)                                               |
+|   Container Port: (Nginx typically 80) -> Host Port: 80                                         |
+|   Technology: React, JavaScript (ES6+), CSS                                                     |
+|   - Serves static React application (likely via Nginx)                                          |
+|   - Makes API calls to Backend Service (http://localhost:8000 or internal Docker network name)  |
+|     - POST /search/  (Query + Filters)                                                          |
+|     - POST /ask/{movie_id} (Question)                                                           |
++-------------------------------------------------------------------------------------------------+
+       │
+       │ API Calls (Within Docker Network: http://backend:8000)
+       ▼
++-------------------------------------------------------------------------------------------------+
+| Dockerized Backend Service (backend)                                                            |
+|   Build: Dockerfile.backend (Python 3.13, uv, multi-stage)                                      |
+|   Container Port: 8000 -> Host Port: 8000                                                       |
+|   Entrypoint: /app/entrypoint.sh                                                                |
+|     - Checks for 'movies' table in PostgreSQL.                                                  |
+|     - If not exists, runs `/app/ingest_movies_optimized.py`.                                    |
+|     - Starts Gunicorn (prod) / Uvicorn (dev) for FastAPI app.                                   |
+|   Technology: FastAPI, Python 3.13                                                              |
+|   GPU Support: Configured via docker-compose.yml (for Sentence Transformers `BAAI/bge-m3`)      |
+|   Environment: .env (DB_USER, DB_PASSWORD, DB_NAME, GOOGLE_API_KEY), DB_HOST=db                  |
+|                                                                                                 |
+|   ┌───────────────────────────┐      ┌───────────────────────────────────────────────────────┐  |
+|   │ API Endpoints (/app/main.py)│      │ Core Components & Libraries                         │  |
+|   │   - POST /search/         │      │   - FastAPI, Uvicorn, Gunicorn                        │  |
+|   │   - POST /ask/{movie_id}  │      │   - SQLAlchemy (PostgreSQL ORM)                       │  |
+|   │                           │      │   - sentence-transformers (BAAI/bge-m3 on GPU/CPU)    │  |
+|   │                           │      │   - chromadb (Vector DB client)                       │  |
+|   │                           │      │   - google-generativeai (Gemini LLM client)           │  |
+|   │                           │      │   - pandas (Data processing in ingestion)             │  |
+|   │                           │      │   - python-dotenv                                     │  |
+|   └───────────┬───────────────┘      └───────────────────────────────────────────────────────┘  |
+|               │                                                                                 |
+|   ┌───────────┴───────────┐   ┌─────────────────────┴─────────────────────┐   ┌─────────────────┴───┐
+|   │ Interaction with DBs  │   │ Interaction with External Services        │   │ Data Ingestion Logic│
+|   └───────────┬───────────┘   └─────────────────────┬─────────────────────┘   └─────────┬───────────┘
+|               ▼                                     ▼                                 ▼
++-----------------------------+     +---------------------------------+     +-----------------------------+
+| PostgreSQL Database Service (db)│     | ChromaDB (Vector Database)      |     | Google Gemini API           |
+|   Image: postgres:15-alpine   |     |   (Persistent Client)           |     | (External LLM Service)      |
+|   Container Port: 5432        |     |   Path: /app/chroma_db_movies   |     | - Called by /ask endpoint   |
+|   Host Port: 5432             |     |   (Mounted from host via volume)|     |                             |
+|   Volume: postgres_data       |     |   Collection: `movie_plots`     |     |                             |
+|   Healthcheck: pg_isready     |     |   - Stores plot embeddings      |     |                             |
+|   - Stores structured movie   |     |     (id, title, year metadata)  |     |                             |
+|     data (movies table: id,   |     |   - Used by /search endpoint    |     |                             |
+|     title, overview, genres,  |     |     for semantic search         |     |                             |
+|     release_year, vote_avg)   |     |                                 |     |                             |
+|   - Used by /search & /ask    |     |                                 |     |                             |
++-----------------------------+     +---------------------------------+     +-----------------------------+
+       ▲                                 ▲
+       │ SQL Operations                  │ Vector Operations
+       │ (via SQLAlchemy)                │ (via chromadb client)
+       └─────────┬───────────────────────┘
+                 │
+                 │ (Executed by `/app/entrypoint.sh` on first run of `backend` service if table DNE)
+                 ▼
++-------------------------------------------------------------------------------------------------+
+| Data Ingestion Script (`/app/ingest_movies_optimized.py`)                                       |
+|   - Reads: `/app/data/movies_metadata.csv` (Copied during Docker build)                         |
+|   - Processing:                                                                                 |
+|     - Parses genres, release dates.                                                             |
+|     - Cleans and transforms data using pandas.                                                  |
+|   - PostgreSQL Population:                                                                      |
+|     - Creates `movies` table if not exists.                                                     |
+|     - Inserts movie metadata in batches.                                                        |
+|   - ChromaDB Population:                                                                        |
+|     - Generates embeddings for "title + overview" using `BAAI/bge-m3`.                          |
+|     - Adds embeddings and (id, title, year) metadata to `movie_plots` collection in batches.    |
++-------------------------------------------------------------------------------------------------+
+
+
+===================================================================================================
+Docker Orchestration (`docker-compose.yml`)
+===================================================================================================
+- Services:
+  - `backend`: Python/FastAPI application.
+    - Depends on: `db` (healthy).
+    - GPU access: Configured via `deploy.resources.reservations`.
+    - Network: `app-network`.
+    - Volumes: `./chroma_db_movies:/app/chroma_db_movies` (for ChromaDB persistence).
+  - `frontend`: React application (likely served by Nginx).
+    - Depends on: `backend`.
+    - Network: `app-network`.
+  - `db`: PostgreSQL database.
+    - Image: `postgres:15-alpine`.
+    - Volume: `postgres_data` (for PostgreSQL data persistence).
+    - Network: `app-network`.
+- Network:
+  - `app-network`: Bridge network for inter-service communication.
+- Volumes:
+  - `postgres_data`: Named volume for PostgreSQL.
+  - `./chroma_db_movies` (bind mount to backend service for ChromaDB data).
+
+===================================================================================================
+Build Process & Dependencies
+===================================================================================================
+- Backend (`Dockerfile.backend`):
+  - Multi-stage build:
+    - `builder` stage (ghcr.io/astral-sh/uv:python3.13-bookworm-slim):
+      - Installs dependencies from `pyproject.toml` & `uv.lock` using `uv sync --locked`.
+    - `final` stage (python:3.13-slim-bookworm):
+      - Copies application and virtual environment (`/app/.venv`) from `builder`.
+      - Sets `PATH` to include virtual environment.
+      - Makes `entrypoint.sh` executable.
+  - Key Dependencies (`pyproject.toml`):
+    - fastapi, uvicorn[standard], gunicorn
+    - sqlalchemy, psycopg2-binary
+    - sentence-transformers, torch==2.7.1+cu126 (CUDA specific via uv.sources & index in pyproject.toml)
+    - chromadb, google-generativeai, pandas, python-dotenv (actually `dotenv` which depends on `python-dotenv`)
+
+- Frontend (`Dockerfile.frontend` - Assumed based on `production` target):
+  - Likely multi-stage build:
+    - Build stage: Installs Node.js dependencies, builds React app (`npm install`, `npm run build`).
+    - Final stage: Copies built static assets to an Nginx server.
+
+===================================================================================================
+Data Flow Highlights
+===================================================================================================
+1. Hybrid Search (`/search`):
+   User Query/Filters (Frontend) -> Backend API -> PostgreSQL (Filter by metadata) ->
+   ChromaDB (Semantic search on filtered IDs) -> Backend (Re-rank, combine) ->
+   PostgreSQL (Fetch full details for top results) -> Frontend (Display results).
+
+2. RAG Question Answering (`/ask/{movie_id}`):
+   User Question (Frontend) -> Backend API -> PostgreSQL (Fetch movie overview as context) ->
+   Backend (Augment: context + question) -> Google Gemini API (Generate answer) ->
+   Frontend (Display AI answer).
+
+===================================================================================================
+Key Files & Directories (in project root, unless specified for container paths)
+===================================================================================================
+- `docker-compose.yml`: Defines services and their orchestration.
+- `Dockerfile.backend`: Instructions to build the backend Docker image.
+- `Dockerfile.frontend`: Instructions to build the frontend Docker image.
+- `entrypoint.sh`: Script executed when the backend container starts (path inside container: `/app/entrypoint.sh`).
+- `pyproject.toml`, `uv.lock`: Python backend dependencies and lock file.
+- `.env` (example: `.env.example`): Environment variables (DB credentials, API keys).
+- `app/` (likely location of backend code, e.g., `app/main.py`).
+- `ingest_movies_optimized.py`: Script for data ingestion (path inside container: `/app/ingest_movies_optimized.py`).
+- `frontend/` (likely): Directory containing React frontend application code.
+- `data/movies_metadata.csv`: Source dataset for movies (copied to `/app/data/` in backend image).
+- `./chroma_db_movies/`: Directory on the host, mounted to `/app/chroma_db_movies/` in the backend container for ChromaDB persistence.
+- `postgres_data/` (Docker named volume): For PostgreSQL data persistence.
+===================================================================================================
