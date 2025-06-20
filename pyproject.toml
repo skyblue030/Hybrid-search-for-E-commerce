@@ -13,6 +13,9 @@ dependencies = [
     "dotenv",
     "torch==2.7.1+cu126",
     "google.generativeai",
+    "gunicorn", # <-- 新增 gunicorn
+    "uvicorn[standard]", # <-- 建議也明確加入 uvicorn 及其 standard extras
+    "fastapi", # <-- 新增 fastapi
     
     # download pytorch with your cuda
 ]

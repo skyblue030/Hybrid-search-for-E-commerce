@@ -1,0 +1,73 @@
+
+services:
+  # 後端 FastAPI 服務
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    # --- 移除 command ---
+    # command: gunicorn ... (這一行整個刪除)
+    volumes:
+      - ./chroma_db_movies:/app/chroma_db_movies
+    env_file:
+      - ./.env
+    # --- 新增 environment ---
+    environment:
+      - APP_ENV=production # 指定為生產模式
+      - DB_HOST=db # <--- 新增這一行，明確指定資料庫主機為 'db'
+    ports: # <--- 新增端口映射
+      - "8000:8000" # 將主機的 8000 端口映射到容器的 8000 端口
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy: # <--- 新增 deploy 區塊以請求 GPU 資源
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # 或 'all'
+              capabilities: [gpu]
+    # runtime: nvidia # 這是舊版 Docker Compose 的語法，如果 deploy 不起作用可以嘗試這個
+    networks:
+      - app-network
+
+  # 前端 Nginx 服務
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: production # <--- 新增這一行，指定建構 production 目標
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # PostgreSQL 資料庫服務
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - ./.env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

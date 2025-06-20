@@ -56,6 +56,26 @@ def main():
         logger.error(f"連接 PostgreSQL 失敗: {e}", exc_info=True)
         return
 
+    # --- 新增：建立 movies 資料表 (如果不存在) ---
+    try:
+        create_table_sql = text("""
+            CREATE TABLE IF NOT EXISTS movies (
+                id INTEGER PRIMARY KEY,
+                title TEXT,
+                overview TEXT,
+                genres TEXT[],
+                release_year INTEGER,
+                vote_average FLOAT
+            );
+        """)
+        db_session.execute(create_table_sql)
+        db_session.commit()
+        logger.info("成功檢查/建立 'movies' 資料表。")
+    except Exception as e:
+        logger.error(f"建立 'movies' 資料表失敗: {e}", exc_info=True)
+        db_session.close()
+        return
+
     # 2. 初始化向量資料庫和模型 (保持不變)
     try:
         embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME, device=DEVICE)
@@ -73,7 +93,11 @@ def main():
 
     # 3. 讀取並處理 CSV 資料 (保持不變)
     try:
-        csv_path = './data/movies_metadata.csv'
+        # --- 修改：使用更穩健的路徑建構 ---
+        # ingest_movies_optimized.py 位於容器內的 /app/ingest_movies_optimized.py (如果從 entrypoint.sh 執行)
+        # 或者在本地執行時，位於專案的根目錄。
+        script_dir = os.path.dirname(os.path.abspath(__file__)) # 獲取腳本所在的目錄
+        csv_path = os.path.join(script_dir, 'data', 'movies_metadata.csv') # 解析為相對於腳本位置的路徑
         df = pd.read_csv(csv_path, low_memory=False)
         
         df = df[pd.to_numeric(df['id'], errors='coerce').notnull()]

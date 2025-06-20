@@ -1,0 +1,23 @@
+services:
+  backend:
+    # 我們用一個簡單的指令，來覆蓋掉 Dockerfile 中的 ENTRYPOINT
+    # 這個指令會印出一句話，然後讓容器睡眠一小時，以保持其運行狀態
+    command: ["python", "-c", "import time; print('--- Backend container is alive and sleeping... ---'); time.sleep(3600)"]
+    # 暫時先把 volumes 和 ports 註解掉，排除干擾
+    # volumes:
+    #   - ./app:/app
+    #   - ./entrypoint.sh:/app/entrypoint.sh
+    # ports:
+    #   - "8000:8000"
+
+  # frontend 的部分保持不變
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"

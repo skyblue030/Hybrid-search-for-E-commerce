@@ -6,6 +6,8 @@
 # 它會將專案的根目錄 (Hybrid-search-for-E-commerce) 加入到 Python 的搜尋路徑中。
 import sys
 import os
+import json
+
 # 將 'app' 資料夾的上一層目錄 (也就是專案根目錄) 加入到 sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # -------------------------
@@ -110,31 +112,59 @@ def hybrid_search(request: models.SearchRequest, db: Session = Depends(database.
 
 @app.post("/ask/{movie_id}", response_model=models.AskResponse, tags=["Q&A"])
 def ask_about_movie(movie_id: int, request: models.AskRequest, db: Session = Depends(database.get_db)):
-    # ... (這個函式的內部邏輯也完全不用變)
+    """
+    對單一電影進行 RAG 問答 (採用 MCP 思想)。
+    """
     if not llm_model:
         raise HTTPException(status_code=500, detail="LLM 服務未成功初始化")
+
+    # 1. 檢索 (Retrieval) - 這一步不變
     movie = db.execute(text("SELECT title, overview FROM movies WHERE id = :id"), {"id": movie_id}).first()
     if not movie:
         raise HTTPException(status_code=404, detail="找不到該 ID 的電影")
-    context = f"電影標題: {movie.title}\n劇情摘要: {movie.overview}"
-    prompt = f"""
-    請你扮演一個電影知識專家。請只根據我提供的「上下文」，用繁體中文簡潔地回答「問題」。
-    如果答案不在上下文中，請回答「根據提供的摘要，我無法回答這個問題。」
 
-    ---
-    上下文:
-    {context}
-    ---
-    問題: {request.question}
-    ---
-    回答:
-    """
+    # 2. 增強 (Augmentation) - 採用 MCP 結構來建立 Prompt
+    #   首先，建立一個代表 MCP 的 Python 字典
+    mcp_data = {
+        "instructions": [
+            "You are a helpful movie expert.",
+            "Please answer the user's question concisely in Traditional Chinese, based *only* on the information provided in the 'context' block.",
+            "If the answer is not found within the context, you must respond with '根據提供的摘要，我無法回答這個問題。'"
+        ],
+        "context": {
+            "Movie Title": movie.title,
+            "Plot Summary": movie.overview
+        },
+        "conversation": [
+            {"role": "human", "content": request.question}
+        ]
+    }
+
+    #   然後，將這個結構化的字典轉換成一個清晰的、給 LLM 閱讀的字串
+    #   我們用 YAML-like 的格式來呈現，可讀性最好
+    prompt_string = f"""
+                    INSTRUCTIONS:
+                    {chr(10).join(f'- {i}' for i in mcp_data["instructions"])}
+
+                    CONTEXT:
+                    ---
+                    {json.dumps(mcp_data['context'], ensure_ascii=False, indent=2)}
+                    ---
+
+                    CONVERSATION:
+                    Human: {mcp_data['conversation'][0]['content']}
+                    Assistant:
+                    """
+
+    # 3. 生成 (Generation) - 這一步不變
     try:
-        response = llm_model.generate_content(prompt)
+        # 將格式化後的 prompt 字串發送給 Gemini
+        response = llm_model.generate_content(prompt_string)
         answer = response.text
     except Exception as e:
         logger.error(f"呼叫 Gemini API 時發生錯誤: {e}")
         raise HTTPException(status_code=500, detail="生成回答時發生錯誤")
+
     return models.AskResponse(
         movie_id=movie_id,
         question=request.question,

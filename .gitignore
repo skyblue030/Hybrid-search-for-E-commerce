@@ -1,38 +1,82 @@
+# Environment Variables
+# 包含敏感資訊和本地設定，絕不提交！
+.env
+.env.*
+!.env.example # 通常 .env.example 檔案會被提交作為範例
+
 # Python Virtual Environments
 .venv/
 venv/
 ENV/
 env/
 
-# Python cache files
+# Python 位元組碼和快取
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+
+# Python 打包與分發
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints
 
 # Secrets - VERY IMPORTANT!
-.env
-*.env
+# .env # 已移至頂部 Environment Variables 區塊
 
 # OS-generated files
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
 Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
 
 # Project-specific ignores
 # ============================
 
 # Vector Database (Generated)
 chroma_db_movies/
-chroma_db_ecommerce/
+# chroma_db_ecommerce/ # 如果您不再使用這個名稱，可以考慮移除
 
 # Large Raw Data Files
+# 如果您的 data 目錄包含大型原始資料集，且不希望它們被追蹤
 /data/
 
 # Frontend Project (React)
 # =========================
 /frontend/node_modules/
 /frontend/build/
-/frontend/.pnp.js
-/frontend/.pnp.loader.js
 /frontend/coverage/
 /frontend/npm-debug.log*
 /frontend/yarn-debug.log*
 /frontend/yarn-error.log*
+/frontend/.eslintcache
+
+# IDE / Editor specific files
+.vscode/
+.idea/
+*.project
+*.classpath
+*.cproject
+*.sublime-project
+*.sublime-workspace
+
+# Log files
+*.log
+logs/
+
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml

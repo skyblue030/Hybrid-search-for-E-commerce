@@ -124,7 +124,7 @@
     * **向量資料**: ChromaDB
 * **AI & ML**:
     * **文字嵌入模型**: `BAAI/bge-m3` (from Hugging Face)
-    * **語言生成模型**: Google Gemini Pro
+    * **語言生成模型**: gemini-1.5-flash-002
 * **核心 Python 函式庫**: `sqlalchemy`, `psycopg2-binary`, `sentence-transformers`, `google-generativeai`, `pandas`
 
 ## 專案設定與啟動指南

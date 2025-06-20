@@ -15,7 +15,8 @@ load_dotenv(dotenv_path='./.env')
 
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "your_password")
-DB_HOST = os.getenv("DB_HOST", "localhost")
+# 在 Docker 環境中，後端服務應該使用服務名稱 'db' 來連接資料庫
+DB_HOST = os.getenv("DB_HOST", "db") # 將預設值從 "localhost" 改為 "db"
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "ecommerce_rag")
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

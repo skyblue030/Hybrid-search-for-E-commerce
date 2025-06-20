@@ -56,7 +56,10 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Something went wrong!');
+        // 嘗試解析後端可能回傳的錯誤訊息
+        const errorData = await response.json().catch(() => null); // 如果回應不是 JSON，則忽略
+        const errorMessage = errorData?.detail || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();

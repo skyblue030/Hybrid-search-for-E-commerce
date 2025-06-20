@@ -1,5 +1,5 @@
 // frontend/src/AskModal.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // 這個元件會接收三個 props:
 // movie: 被選中的電影物件
@@ -9,6 +9,16 @@ function AskModal({ movie, onClose, isOpen }) {
   const [question, setQuestion] = useState(''); // 使用者輸入的問題
   const [answer, setAnswer] = useState('');   // LLM 回傳的答案
   const [isAsking, setIsAsking] = useState(false); // 是否正在詢問中
+
+  // --- 新增 useEffect Hook ---
+  // 當 Modal 的開啟狀態 (isOpen) 或選中的電影 (movie) 改變時，
+  // 重設問題和答案的狀態。
+  useEffect(() => {
+    if (!isOpen) { // 如果 Modal 關閉
+      setQuestion(''); // 清空問題輸入
+      setAnswer('');   // 清空 AI 回答
+    }
+  }, [isOpen, movie]); // 依賴 isOpen 和 movie 的變化
 
   if (!isOpen || !movie) {
     return null; // 如果沒打開或沒選中電影，就不渲染任何東西
@@ -35,7 +45,10 @@ function AskModal({ movie, onClose, isOpen }) {
       });
 
       if (!response.ok) {
-        throw new Error('API request failed');
+        // 如果後端返回錯誤狀態 (例如 404, 500)，嘗試解析錯誤訊息
+        // 這樣可以顯示後端提供的更具體的錯誤，而不僅僅是 'API request failed'
+        const errorData = await response.json().catch(() => ({ detail: 'API request failed with status ' + response.status }));
+        throw new Error(errorData.detail || 'API request failed');
       }
 
       const data = await response.json();
